@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+
+import sys
+import os
+
+stdin = os.fdopen(sys.stdin.fileno(), "rb", closefd=False)
+stdout = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
+
+while bs := stdin.read(1):
+    stdout.write(bs)
+    stdout.flush()
+
+    # prints to stderr so we can see
+    sys.stderr.write('x')
+    sys.stderr.write(hex(bs[0])[2:].rjust(2, '0'))
+    sys.stderr.flush()
+

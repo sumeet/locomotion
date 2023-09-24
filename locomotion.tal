@@ -1,0 +1,227 @@
+|00 @System &vector $2 &wst $1 &rst $1 &pad $4 &r $2 &g $2 &b $2 &debug $1 &halt $1
+|10 @Console &vector $2 &read $1 &pad $5 &write $1 &error $1
+|20 @Screen &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+|30 @Audio0 &vector $2 &position $2 &output $1 &pad $3 &adsr $2 &length $2 &addr $2 &volume $1 &pitch $1
+|40 @Audio1 &vector $2 &position $2 &output $1 &pad $3 &adsr $2 &length $2 &addr $2 &volume $1 &pitch $1
+|80 @Controller &vector $2 &button $1 &key $1
+|90 @Mouse &vector $2 &x $2 &y $2 &state $1 &pad $3 &modx $2 &mody $2
+
+|0000
+	@buf $40 &eof
+
+|0040
+  @incoming &num-bytes-read $2 &start &len $2 &ip $4 &payload
+
+|0100
+@on-reset ( -> )
+	( theme )
+	#0fe3 .System/r DEO2
+	#0fc3 .System/g DEO2
+	#0f23 .System/b DEO2
+
+	;on-control .Controller/vector DEO2
+	;on-stdin .Console/vector DEO2
+  BRK
+
+@on-stdin ( -> )
+  .Console/read DEI
+  ;incoming/num-bytes-read LDA2 ;incoming/start ADD2
+  STA2
+
+
+  ;incoming/num-bytes-read
+  INC2
+  ;incoming/num-bytes-read STA2
+
+  ( if reading the first byte then store first )
+
+  LIT "( draw-char
+
+  ( read 2 bytes for length )
+  #01 .Console/read DEO .Console/read DEI
+  #01 .Console/read DEO .Console/read DEI
+
+  ( read 4 bytes for ip of sender )
+  .Console/read DEI 
+  #01 .Console/read DEO .Console/read DEI draw-hex-short
+  #01 .Console/read DEO .Console/read DEI
+  #01 .Console/read DEO .Console/read DEI draw-hex-short
+
+  LIT ") draw-char
+
+  ( POP2 POP2
+  #0a #33 #02 #0a )
+
+
+  LIT "( draw-char
+  DUP2 draw-hex-short
+  LIT ") draw-char
+
+  ( then read length bytes and draw them onto the screen )
+  &draw-msg-loop
+    .Console/read DEI draw-char #01 .Console/read DEO
+    #0001 SUB2
+    ?&draw-msg-loop
+  BRK
+
+@draw-sender ( 4 bytes ip addr -- )
+  LIT "< draw-char
+  draw-hex-short
+  draw-hex-short
+  LIT "> draw-char
+  JMPr2
+
+@strlen2 ( string-ptr* -- length^ )
+	LIT2r 0000
+	,&entry JMP
+
+	&loop
+	INC2 INC2r
+	&entry
+	LDAk ,&loop JCN
+	POP2 STH2r
+	JMP2r
+
+@draw-char ( char -- )
+  #00 SWP ( pad with zeros to do 16 bit arith on char )
+  ( DUP #18 DEO )
+
+  #0020 SUB2 ( font is offset by +20 )
+  #0008 MUL2 ( convert to index in font ) 
+
+  ;font ADD2 
+  .Screen/addr DEO2
+  #01 .Screen/auto DEO ( set auto x incr )
+  #01 .Screen/sprite DEO
+  JMP2r
+
+@print-string ( *addr -- )
+  LDAk 
+  #18 DEO
+  INC2
+  LDAk ?print-string
+  POP2
+  JMP2r
+
+@draw-string ( *addr -- )
+  LDAk draw-char
+  INC2
+  LDAk ?draw-string
+  POP2
+  JMP2r
+
+@print ( v* -- )
+	SWP ,&byte JSR
+	&byte ( byte -- ) DUP #04 SFT ,&char JSR
+	&char ( char -- ) #0f AND DUP #09 GTH #27 MUL ADD #30 ADD #18 DEO
+JMP2r
+
+@on-control ( -> )
+	.Controller/key DEI
+	DUP #0d EQU ?&on-submit
+	!&not-submit
+	&on-submit
+	  ;buf send-over-the-wire
+
+    ( clears the buffer )
+    #0000 ;buf STA2
+
+    ( reset x cursor back to 0 )
+    #0000 .Screen/x DEO2 
+    .Screen/y DEI2 #0008 ADD2 .Screen/y DEO2 ( add 8 to move y to the next line )
+
+	  BRK
+
+	( if they didn't hit enter then just append the char they typed )
+	&not-submit
+    DUP draw-char
+    #00 ;buf scap/ STA2
+    BRK
+
+
+@draw-hex-short ( short* -- )
+	SWP draw-hex-short/b
+	&b ( -- )
+		DUP #04 SFT draw-hex-short/c
+	&c ( -- )
+		#0f AND DUP #09 GTH #27 MUL ADD LIT "0 ADD draw-char
+		JMP2r
+
+( sends the buffer to stdout and moves string to the next line )
+@send-over-the-wire ( char* -- )
+  DUP2 strlen2
+  ( first write 16 bits length to stdout )
+  #18 DEO #18 DEO
+
+  print-string
+
+  &done
+    POP
+    JMPr2
+
+@scap ( str* -- str* )
+	INC2 & LDAk ?scap
+	JMP2r
+
+@<phex> ( short* -- )
+	SWP <phex>/b
+	&b ( -- )
+		DUP #04 SFT <phex>/c
+	&c ( -- )
+		#0f AND DUP #09 GTH #27 MUL ADD LIT "0 ADD #18 DEO
+		JMP2r
+
+@smiley
+  0000 4400 4438 0000
+
+( font is offset by +20, starts at space char )
+@font ( atari8 )
+0000 0000 0000 0000 6060 6060 6000 6000
+6666 6600 0000 0000 006c fe6c 6cfe 6c00
+183e 603c 067c 1800 0066 6c18 3066 4600
+386c 3870 decc 7600 6060 6000 0000 0000
+1c30 3030 3030 1c00 380c 0c0c 0c0c 3800
+0066 3cff 3c66 0000 0018 187e 1818 0000
+0000 0000 0030 3060 0000 007e 0000 0000
+0000 0000 0018 1800 0306 0c18 3060 c000
+3c66 6e76 6666 3c00 1838 1818 1818 7e00
+3c66 060c 1830 7e00 7e0c 180c 0666 3c00
+0c1c 3c6c 7e0c 0c00 7e60 7c06 0666 3c00
+3c60 607c 6666 3c00 7e06 0c18 3030 3000
+3c66 663c 6666 3c00 3c66 663e 060c 3800
+0018 1800 0018 1800 0018 1800 1818 3000
+0c18 3060 3018 0c00 0000 7e00 007e 0000
+3018 0c06 0c18 3000 3c66 060c 1800 1800
+3c66 6e6a 6e60 3e00 183c 6666 7e66 6600
+7c66 667c 6666 7c00 3c66 6060 6066 3c00
+786c 6666 666c 7800 7e60 607c 6060 7e00
+7e60 607c 6060 6000 3e60 606e 6666 3e00
+6666 667e 6666 6600 3c18 1818 1818 3c00
+3e06 0606 0666 3c00 666c 7870 786c 6600
+6060 6060 6060 7e00 c6ee fed6 c6c6 c600
+6676 7e7e 6e66 6600 3c66 6666 6666 3c00
+7c66 667c 6060 6000 3c66 6666 766c 3600
+7c66 667c 6c66 6600 3c66 603c 0666 3c00
+7e18 1818 1818 1800 6666 6666 6666 3e00
+6666 6666 663c 1800 c6c6 c6d6 feee c600
+6666 3c18 3c66 6600 6666 663c 1818 1800
+7e06 0c18 3060 7e00 3c30 3030 3030 3c00
+c060 3018 0c06 0300 3c0c 0c0c 0c0c 3c00
+1038 6cc6 0000 0000 0000 0000 0000 fe00
+0060 3018 0000 0000 0000 3c06 3e66 3e00
+6060 7c66 6666 7c00 0000 3c60 6060 3c00
+0606 3e66 6666 3e00 0000 3c66 7e60 3c00
+1c30 7c30 3030 3000 0000 3e66 663e 067c
+6060 7c66 6666 6600 1800 3818 1818 3c00
+1800 1818 1818 1870 6060 666c 786c 6600
+3818 1818 1818 3c00 0000 ecfe d6c6 c600
+0000 7c66 6666 6600 0000 3c66 6666 3c00
+0000 7c66 6666 7c60 0000 3e66 6666 3e06
+0000 7c66 6060 6000 0000 3e60 3c06 7c00
+0018 7e18 1818 0e00 0000 6666 6666 3e00
+0000 6666 663c 1800 0000 c6c6 d67c 6c00
+0000 663c 183c 6600 0000 6666 663e 067c
+0000 7e0c 1830 7e00 1c30 3060 3030 1c00
+1818 1818 1818 1818 380c 0c06 0c0c 3800
+0000 60f2 9e0c 0000 3c42 9985 8599 423c
+
