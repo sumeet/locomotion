@@ -30,16 +30,16 @@
   ( count &> ) ;incoming/num-bytes-read STA2k
   ( ;incoming/num-bytes-read -> ) POP2
 
-  DUP2 ( <-> ) draw-hex-short
+  #0001 ( <-> ) draw-hex-short
   draw-next-line
 
   ( first 4 bytes are the IP )
   ( count &> ) #0001 ( -> ) EQU2k ?{ LIT "< draw-char }
-  (#0001 -> ) POP2 #0005 LTH2k ?{
+  ( #0001 -> ) POP2 #0005 LTH2k ?{
     .Console/read DEI draw-hex-char
   }
-  (#0005 -> ) POP2 #0004 EQU2k ?{ LIT "> draw-char }
-  (#0004 -> ) POP2 
+  ( #0005 -> ) POP2 #0004 EQU2k ?{ LIT "> draw-char }
+  ( #0004 -> ) POP2 
 
   ( next 2 bytes are the payload length )
   ( count -> ) POP2
