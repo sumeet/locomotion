@@ -27,21 +27,35 @@
   ( increment num-bytes-read )
   ;incoming/num-bytes-read LDA2 ( =: count )
   INC2 ( =: count )
-  ( count &> ) ;incoming/num-bytes-read STA2k
-  ( ;incoming/num-bytes-read -> ) POP2
+  ( count &> ) DUP2 ;incoming/num-bytes-read STA2
 
-  #0001 ( <-> ) draw-hex-short
-  draw-next-line
+  ( 
+  LIT "( draw-char
+  ( count &> ) DUP2 draw-hex-short 
+  LIT ") draw-char
+   )
 
   ( first 4 bytes are the IP )
-  ( count &> ) #0001 ( -> ) EQU2k ?{ LIT "< draw-char }
-  ( #0001 -> ) POP2 #0005 LTH2k ?{
+  ( count &> ) DUP2 #0001 EQU2
+
+  LIT "[ draw-char
+  LIT "b draw-char
+  LIT ": draw-char
+  DUP2 draw-hex-char
+  LIT "] draw-char
+
+  ?{
+    LIT "< draw-char
+  }
+
+  ( count &> ) DUP2 #0005 LTH2 ?{
     .Console/read DEI draw-hex-char
   }
-  ( #0005 -> ) POP2 #0004 EQU2k ?{ LIT "> draw-char }
-  ( #0004 -> ) POP2 
+  ( count &> ) DUP2 #0004 LTH2 ?{ LIT ". draw-char }
+  ( count &> ) DUP2 #0004 EQU2 ?{ LIT "> draw-char }
 
   ( next 2 bytes are the payload length )
+  ( TODO: IMPLEMENTE ME )
   ( count -> ) POP2
   BRK
 
