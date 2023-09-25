@@ -7,10 +7,10 @@
 |90 @Mouse &vector $2 &x $2 &y $2 &state $1 &pad $3 &modx $2 &mody $2
 
 |0000
-	@buf $40 &eof
+	@input-field-buf $40 &eof
 
 |0040
-  @incoming &num-bytes-read $2 &start &len $2 &ip $4 &payload
+  @incoming &num-bytes-read $2 &payload-len $2
 
 |0100
 @on-reset ( -> )
@@ -19,57 +19,31 @@
 	#0fc3 .System/g DEO2
 	#0f23 .System/b DEO2
 
-	;on-control .Controller/vector DEO2
+	;on-input .Controller/vector DEO2
 	;on-stdin .Console/vector DEO2
   BRK
 
 @on-stdin ( -> )
-  .Console/read DEI
-  ;incoming/num-bytes-read LDA2 ;incoming/start ADD2
-  STA2
+  ( increment num-bytes-read )
+  ;incoming/num-bytes-read LDA2 ( =: count )
+  INC2 ( =: count )
+  ( count &> ) ;incoming/num-bytes-read STA2k
+  ( ;incoming/num-bytes-read -> ) POP2
 
+  DUP2 ( <-> ) draw-hex-short
+  draw-next-line
 
-  ;incoming/num-bytes-read
-  INC2
-  ;incoming/num-bytes-read STA2
+  ( first 4 bytes are the IP )
+  ( count &> ) #0001 ( -> ) EQU2k ?{ LIT "< draw-char }
+  (#0001 -> ) POP2 #0005 LTH2k ?{
+    .Console/read DEI draw-hex-char
+  }
+  (#0005 -> ) POP2 #0004 EQU2k ?{ LIT "> draw-char }
+  (#0004 -> ) POP2 
 
-  ( if reading the first byte then store first )
-
-  LIT "( draw-char
-
-  ( read 2 bytes for length )
-  #01 .Console/read DEO .Console/read DEI
-  #01 .Console/read DEO .Console/read DEI
-
-  ( read 4 bytes for ip of sender )
-  .Console/read DEI 
-  #01 .Console/read DEO .Console/read DEI draw-hex-short
-  #01 .Console/read DEO .Console/read DEI
-  #01 .Console/read DEO .Console/read DEI draw-hex-short
-
-  LIT ") draw-char
-
-  ( POP2 POP2
-  #0a #33 #02 #0a )
-
-
-  LIT "( draw-char
-  DUP2 draw-hex-short
-  LIT ") draw-char
-
-  ( then read length bytes and draw them onto the screen )
-  &draw-msg-loop
-    .Console/read DEI draw-char #01 .Console/read DEO
-    #0001 SUB2
-    ?&draw-msg-loop
+  ( next 2 bytes are the payload length )
+  ( count -> ) POP2
   BRK
-
-@draw-sender ( 4 bytes ip addr -- )
-  LIT "< draw-char
-  draw-hex-short
-  draw-hex-short
-  LIT "> draw-char
-  JMPr2
 
 @strlen2 ( string-ptr* -- length^ )
 	LIT2r 0000
@@ -116,28 +90,39 @@
 	&char ( char -- ) #0f AND DUP #09 GTH #27 MUL ADD #30 ADD #18 DEO
 JMP2r
 
-@on-control ( -> )
+@on-input ( -> )
 	.Controller/key DEI
 	DUP #0d EQU ?&on-submit
 	!&not-submit
 	&on-submit
-	  ;buf send-over-the-wire
+	  ;input-field-buf send-over-the-wire
 
     ( clears the buffer )
-    #0000 ;buf STA2
+    #0000 ;input-field-buf STA2
 
-    ( reset x cursor back to 0 )
-    #0000 .Screen/x DEO2 
-    .Screen/y DEI2 #0008 ADD2 .Screen/y DEO2 ( add 8 to move y to the next line )
-
+    draw-next-line
 	  BRK
 
 	( if they didn't hit enter then just append the char they typed )
 	&not-submit
     DUP draw-char
-    #00 ;buf scap/ STA2
+    #00 ;input-field-buf scap/ STA2
     BRK
 
+@draw-next-line ( -- )
+  ( reset x cursor back to 0 )
+  #0000 .Screen/x DEO2 
+  ( add 8 to move y to the next line )
+  .Screen/y DEI2 #0008 ADD2 .Screen/y DEO2 
+  JMP2r
+
+
+
+@draw-hex-char ( char* -- )
+	DUP #04 SFT draw-hex-char/c
+	&c ( -- )
+		#0f AND DUP #09 GTH #27 MUL ADD LIT "0 ADD draw-char
+		JMP2r
 
 @draw-hex-short ( short* -- )
 	SWP draw-hex-short/b
@@ -152,12 +137,8 @@ JMP2r
   DUP2 strlen2
   ( first write 16 bits length to stdout )
   #18 DEO #18 DEO
-
   print-string
-
-  &done
-    POP
-    JMPr2
+  JMPr2
 
 @scap ( str* -- str* )
 	INC2 & LDAk ?scap
@@ -170,9 +151,6 @@ JMP2r
 	&c ( -- )
 		#0f AND DUP #09 GTH #27 MUL ADD LIT "0 ADD #18 DEO
 		JMP2r
-
-@smiley
-  0000 4400 4438 0000
 
 ( font is offset by +20, starts at space char )
 @font ( atari8 )

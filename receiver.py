@@ -23,7 +23,7 @@ stdout = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
 while True:
     data, addr = sock.recvfrom(1 << 16)
     print(f'got {len(data)} bytes from {addr[0]}', file=sys.stderr)
-    stdout.write(len(data).to_bytes(2, 'little'))
     stdout.write(ip_address(addr[0]).packed)
+    stdout.write(len(data).to_bytes(2, 'little'))
     stdout.write(data)
     stdout.flush()
