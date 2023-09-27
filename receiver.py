@@ -24,6 +24,6 @@ while True:
     data, addr = sock.recvfrom(1 << 16)
     print(f'got {len(data)} bytes from {addr[0]}', file=sys.stderr)
     stdout.write(ip_address(addr[0]).packed)
-    stdout.write(len(data).to_bytes(2, 'little'))
+    stdout.write(len(data).to_bytes(2, 'big'))
     stdout.write(data)
     stdout.flush()

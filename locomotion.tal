@@ -29,34 +29,39 @@
   INC2 ( =: count )
   ( count &> ) DUP2 ;incoming/num-bytes-read STA2
 
-  ( 
-  LIT "( draw-char
-  ( count &> ) DUP2 draw-hex-short 
-  LIT ") draw-char
-   )
-
   ( first 4 bytes are the IP )
-  ( count &> ) DUP2 #0001 EQU2
+  ( count &> ) DUP2 #0001 EQU2 #00 EQU ?{ LIT "< draw-char }
 
-  LIT "[ draw-char
-  LIT "b draw-char
-  LIT ": draw-char
-  DUP2 draw-hex-char
-  LIT "] draw-char
-
-  ?{
-    LIT "< draw-char
-  }
-
-  ( count &> ) DUP2 #0005 LTH2 ?{
+  ( count &> ) DUP2 #0005 LTH2 #00 EQU ?{
     .Console/read DEI draw-hex-char
   }
-  ( count &> ) DUP2 #0004 LTH2 ?{ LIT ". draw-char }
-  ( count &> ) DUP2 #0004 EQU2 ?{ LIT "> draw-char }
+  ( count &> ) DUP2 #0004 LTH2 #00 EQU ?{ LIT ". draw-char }
+  ( count &> ) DUP2 #0004 EQU2 #00 EQU ?{ LIT "> draw-char }
+
+  ( count &> ) DUP2 #0005 LTH2 #00 EQU ?{ BRK }
 
   ( next 2 bytes are the payload length )
-  ( TODO: IMPLEMENTE ME )
-  ( count -> ) POP2
+  ( count &> ) DUP2 #0005 EQU2 #00 EQU ?{
+    .Console/read DEI ;incoming/payload-len STA
+    BRK
+  }
+  ( count &> ) DUP2 #0006 EQU2 #00 EQU ?{
+    .Console/read DEI #0001 ;incoming/payload-len ADD2 STA
+    ( and then draw a space )
+    #20 draw-char
+    BRK
+  }
+
+  ( print out the char from the payload )
+  .Console/read DEI draw-char
+
+  ( if count - 6 == payload-len then draw newline and reset )
+
+  ( count -> ) #0006 SUB2 ;incoming/payload-len LDA2 EQU2 #00 EQU ?{
+    draw-next-line
+    #0000 ;incoming/num-bytes-read STA2
+  }
+  
   BRK
 
 @strlen2 ( string-ptr* -- length^ )
@@ -105,23 +110,24 @@
 JMP2r
 
 @on-input ( -> )
-	.Controller/key DEI
-	DUP #0d EQU ?&on-submit
-	!&not-submit
-	&on-submit
+	( handle newline )
+	.Controller/key DEI #0d NEQ ?{
+	  { "gotgotgot 00 } STHr2 draw-string
 	  ;input-field-buf send-over-the-wire
-
-    ( clears the buffer )
-    #0000 ;input-field-buf STA2
-
+    ( clears the buffer ) #0000 ;input-field-buf STA2
     draw-next-line
 	  BRK
+	}
 
-	( if they didn't hit enter then just append the char they typed )
-	&not-submit
-    DUP draw-char
-    #00 ;input-field-buf scap/ STA2
-    BRK
+	( handle backspace )
+	.Controller/key DEI #08 NEQ ?{
+	  { "gotbackspace 00 } STHr2 draw-string
+	  BRK
+	}
+
+  .Controller/key DEI draw-char
+  #00 ;input-field-buf scap/ STA2
+  BRK
 
 @draw-next-line ( -- )
   ( reset x cursor back to 0 )
@@ -129,7 +135,6 @@ JMP2r
   ( add 8 to move y to the next line )
   .Screen/y DEI2 #0008 ADD2 .Screen/y DEO2 
   JMP2r
-
 
 
 @draw-hex-char ( char* -- )
