@@ -110,24 +110,33 @@
 JMP2r
 
 @on-input ( -> )
-	( handle newline )
-	.Controller/key DEI #0d NEQ ?{
-	  { "gotgotgot 00 } STHr2 draw-string
-	  ;input-field-buf send-over-the-wire
-    ( clears the buffer ) #0000 ;input-field-buf STA2
+  .Controller/key DEI
+
+  ( handle newline )
+  DUP #0d NEQ ?{
+    ;input-field-buf send-over-the-wire
+
+    ( clears the buffer )
+    #0000 ;input-field-buf STA2
     draw-next-line
-	  BRK
-	}
+    BRK
+  }
 
-	( handle backspace )
-	.Controller/key DEI #08 NEQ ?{
-	  { "gotbackspace 00 } STHr2 draw-string
-	  BRK
-	}
+  ( handle backspace )
+  DUP #08 NEQ ?{
+    ;input-field-buf send-over-the-wire
 
-  .Controller/key DEI draw-char
+    ( clears the buffer )
+    #0000 ;input-field-buf STA2
+    draw-next-line
+    BRK
+  }
+
+  ( if they didn't hit enter then just append the char they typed )
+  DUP draw-char
   #00 ;input-field-buf scap/ STA2
   BRK
+
 
 @draw-next-line ( -- )
   ( reset x cursor back to 0 )
